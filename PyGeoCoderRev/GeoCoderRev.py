@@ -1,25 +1,83 @@
+import argparse
 import csv
 import io
 import os
 
+from pprint import pprint
 from time import time
 
 import reverse_geocoder as rg
 
-# source file without reverse-geocoded values
-src_file_path = '/home/data/quake-info/catsearch.5055'
-src_delimiter = ','
-src_quotechar = '"'
-src_quoting = csv.QUOTE_MINIMAL
+pgm_name = 'GeoCoderRev.py'
+pgm_version = '1.0'
 
-# target file with reverse-gencoded values
-tgt_file_path = os.path.splitext(src_file_path)[0] + '_reverse_geocoded.csv'
-tgt_delimiter = ','
-tgt_quotechar = '"'
-tgt_quoting = csv.QUOTE_MINIMAL
+quotemode_choices = ['QUOTE_MINIMAL', 'QUOTE_NONE', 'QUOTE_ALL', 'QUOTE_NONNUMERIC']
 
-max_rows = 0 # how many rows to process, 0 means unlimited
-flush_rows = 10000 # how many rows to flush to output at a time
+def quotemode_xlator(quote_mode_str):
+
+    quote_mode_val = csv.QUOTE_MINIMAL
+    
+    if quote_mode_str.upper() == 'QUOTE_MINIMAL':
+        quote_mode_val = csv.QUOTE_MINIMAL
+    elif quote_mode_str.upper() == 'QUOTE_ALL':
+        quote_mode_val = csv.QUOTE_ALL
+    elif quote_mode_str.upper() == 'QUOTE_NONE':
+        quote_mode_val = csv.QUOTE_NONE
+    elif quote_mode_str.upper() == 'QUOTE_NONNUMERIC':
+        quote_mode_val = csv.QUOTE_NONNUMERIC
+    
+    return quote_mode_val
+
+arg_parser = argparse.ArgumentParser(prog='%s' % pgm_name, description='Reverse geo-code an NCEDC-formatted earthquake file.')
+
+arg_parser.add_argument('--src-file-path', required=True, help='source file path')
+arg_parser.add_argument('--src-delimiter', default=',', help='source file delimiter character')
+arg_parser.add_argument('--src-quotechar', default='"', help='source file quote character')
+arg_parser.add_argument('--src-quotemode', dest='src_quotemode_str', default='QUOTE_MINIMAL', choices=quotemode_choices, help='source file quoting mode (default: %s)' % 'QUOTE_MINIMAL')
+
+arg_parser.add_argument('--out-file-path', default=None, help='output file path (default: None, same path as source file)')
+arg_parser.add_argument('--out-delimiter', default=',', help='output file delimiter character')
+arg_parser.add_argument('--out-quotechar', default='"', help='output file quote character')
+arg_parser.add_argument('--out-quotemode', dest='out_quotemode_str', default='QUOTE_MINIMAL', choices=quotemode_choices, help='output file quoting mode (default: %s)' % 'QUOTE_MINIMAL')
+
+arg_parser.add_argument('--out-file-name-folder', default=None, help='output file name folder (default: None')
+arg_parser.add_argument('--out-file-name-prefix', default='NCEDC_earthquakes', help='output file name prefix (default: NCEDC_earthquakes')
+arg_parser.add_argument('--out-file-name-suffix', default='_reverse_geocoded.csv', help='output file name suffix (default: _reverse_geocoded)')
+arg_parser.add_argument('--out-file-name-extension', default='.csv', help='output file name extension (default: .csv)')
+
+arg_parser.add_argument('--max-rows', type=int, default=0, help='maximum rows to process, 0 means unlimited')
+arg_parser.add_argument('--flush-rows', type=int, default=1000, help='flush rows interval')
+
+arg_parser.add_argument('--version', action='version', version='version=%s %s' % (pgm_name, pgm_version))
+
+args = arg_parser.parse_args()
+
+if args.out_file_path is None:
+    if args.out_file_name_folder is None:
+        args.out_file_name_folder = os.path.dirname(args.src_file_path)
+    args.out_file_path = os.path.join(args.out_file_name_folder, args.out_file_name_prefix + args.out_file_name_suffix + args.out_file_name_extension)
+    
+args.src_quotemode_enm = quotemode_xlator(args.src_quotemode_str)
+args.out_quotemode_enm = quotemode_xlator(args.out_quotemode_str)
+
+args.max_rows = abs(args.max_rows)
+args.flush_rows = abs(args.flush_rows)
+
+if args.src_file_path.startswith('~'):
+    args.src_file_path = os.path.expanduser(args.src_file_path)
+args.src_file_path = os.path.abspath(args.src_file_path)
+
+if args.out_file_path.startswith('~'):
+    args.out_file_path = os.path.expanduser(args.outfile_path)
+args.out_file_path = os.path.abspath(args.out_file_path)
+    
+print ('Reverse-geocoding source NCEDC earthquakes file: "%s"' % args.src_file_path)
+print ('Outputting to the target NCEDC earthquakes file: "%s"' % args.out_file_path)
+print ('')
+
+print('Command line args:')
+pprint (vars(args))
+print('')
 
 # beginning time hack
 bgn_time = time()
@@ -30,16 +88,16 @@ row_count = 0
 out_count = 0
 
 # if the source file exists
-if os.path.exists(src_file_path):
+if os.path.exists(args.src_file_path):
 
     # open the target file for writing
-    with io.open(tgt_file_path, 'w', newline='') as tgt_file:
+    with io.open(args.out_file_path, 'w', newline='') as out_file:
 
         # open the source file for reading
-        with io.open(src_file_path, 'r', newline='') as src_file:
+        with io.open(args.src_file_path, 'r', newline='') as src_file:
 
             # open a CSV file dictionary reader object
-            csv_reader = csv.DictReader(src_file, delimiter=src_delimiter, quoting=src_quoting)
+            csv_reader = csv.DictReader(src_file, delimiter=args.src_delimiter, quotechar=args.src_quotechar, quoting=args.src_quotemode_enm)
 
             # obtain the field names from
             # the first line of the source file
@@ -52,7 +110,7 @@ if os.path.exists(src_file_path):
             fieldnames.append('name')
 
             # instantiate the CSV dictionary writer object with the modified field names list
-            csv_writer = csv.DictWriter(tgt_file, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL, fieldnames=fieldnames)
+            csv_writer = csv.DictWriter(out_file, delimiter=args.out_delimiter, quotechar=args.out_quotechar, quoting=args.out_quotemode_enm, fieldnames=fieldnames)
 
             # output the header row
             csv_writer.writeheader()
@@ -103,17 +161,17 @@ if os.path.exists(src_file_path):
                     out_count += 1
 
                 # if row count equals or exceeds max rows
-                if max_rows > 0 and row_count >= max_rows:
+                if args.max_rows > 0 and row_count >= args.max_rows:
                     # break out of reading loop
                     break
 
                 # if row count is modulus
                 # of the flush count value
-                if row_count % flush_rows == 0:
+                if row_count % args.flush_rows == 0:
 
                     # flush accumulated
                     # rows to target file
-                    tgt_file.flush()
+                    out_file.flush()
 
                     # ending time hack
                     end_time = time()
@@ -126,6 +184,10 @@ if os.path.exists(src_file_path):
                     # output progress message
                     message = "Processed: {:,} rows in {:,.0f} seconds @ {:,.0f} records/second".format(row_count, seconds, rcds_per_second)
                     print(message)
+                    
+else:
+    
+    print ('NCEDC-formatted Earthquake file not found: "%s"' % args.src_file_path)
 
 # ending time hack
 end_time = time()
@@ -138,5 +200,6 @@ else:
 # output end-of-processing messages
 message = "Processed: {:,} rows in {:,.0f} seconds @ {:,.0f} records/second".format(row_count, seconds, rcds_per_second)
 print(message)
-print("Processing finished, %d rows output!" % out_count)
+print('Output file path: "%s"' % args.out_file_path)
+print("Processing finished, {:,} rows output!".format(out_count))
 
