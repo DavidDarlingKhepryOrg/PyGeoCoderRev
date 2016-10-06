@@ -1,6 +1,8 @@
+# -*- coding: utf-8 -*-
+
 # ========================================================================
 #
-# Copyright © 2016 Khepry Quixote
+# Copyright Â© 2016 Khepry Quixote
 # 
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -52,16 +54,19 @@ arg_parser.add_argument('--src-file-path', required=True, help='source file path
 arg_parser.add_argument('--src-delimiter', default=',', help='source file delimiter character')
 arg_parser.add_argument('--src-quotechar', default='"', help='source file quote character')
 arg_parser.add_argument('--src-quotemode', dest='src_quotemode_str', default='QUOTE_MINIMAL', choices=quotemode_choices, help='source file quoting mode (default: %s)' % 'QUOTE_MINIMAL')
+arg_parser.add_argument('--src-date-ymd-separator', default='/', help='source date year, month, day separator (default: /)')
 
 arg_parser.add_argument('--out-file-path', default=None, help='output file path (default: None, same path as source file)')
 arg_parser.add_argument('--out-delimiter', default=',', help='output file delimiter character')
 arg_parser.add_argument('--out-quotechar', default='"', help='output file quote character')
 arg_parser.add_argument('--out-quotemode', dest='out_quotemode_str', default='QUOTE_MINIMAL', choices=quotemode_choices, help='output file quoting mode (default: %s)' % 'QUOTE_MINIMAL')
+arg_parser.add_argument('--out-header-row', default='Y', help='output a header row to file (default: Y)')
 
 arg_parser.add_argument('--out-file-name-folder', default=None, help='output file name folder (default: None')
 arg_parser.add_argument('--out-file-name-prefix', default='NCEDC_earthquakes', help='output file name prefix (default: NCEDC_earthquakes')
 arg_parser.add_argument('--out-file-name-suffix', default='_reverse_geocoded.csv', help='output file name suffix (default: _reverse_geocoded)')
 arg_parser.add_argument('--out-file-name-extension', default='.csv', help='output file name extension (default: .csv)')
+arg_parser.add_argument('--out-date-ymd-separator', default='-', help='output date year, month, day separator (default: -)')
 
 arg_parser.add_argument('--max-rows', type=int, default=0, help='maximum rows to process, 0 means unlimited')
 arg_parser.add_argument('--flush-rows', type=int, default=1000, help='flush rows interval')
@@ -69,6 +74,8 @@ arg_parser.add_argument('--flush-rows', type=int, default=1000, help='flush rows
 arg_parser.add_argument('--version', action='version', version='version=%s %s' % (pgm_name, pgm_version))
 
 args = arg_parser.parse_args()
+
+args.out_header_row = args.out_header_row.upper();
 
 if args.out_file_path is None:
     if args.out_file_name_folder is None:
@@ -122,6 +129,12 @@ if os.path.exists(args.src_file_path):
             fieldnames = csv_reader.fieldnames
             # append the reverse geo-coding
             # result fields to field names list
+            fieldnames.append('Event_Year')
+            fieldnames.append('Event_Month')
+            fieldnames.append('Event_Day')
+            fieldnames.append('Event_Hour')
+            fieldnames.append('Event_Min')
+            fieldnames.append('Event_Sec')
             fieldnames.append('cc')
             fieldnames.append('admin1')
             fieldnames.append('admin2')
@@ -131,7 +144,8 @@ if os.path.exists(args.src_file_path):
             csv_writer = csv.DictWriter(out_file, delimiter=args.out_delimiter, quotechar=args.out_quotechar, quoting=args.out_quotemode_enm, fieldnames=fieldnames)
 
             # output the header row
-            csv_writer.writeheader()
+            if args.out_header_row == 'Y':
+                csv_writer.writeheader()
 
             # beginning time hack
             bgn_time = time()
@@ -140,6 +154,17 @@ if os.path.exists(args.src_file_path):
             for row in csv_reader:
 
                 row_count += 1
+                
+                # remove last 3 characters (.00)
+                # so that the timestamp will be more
+                # suitable for importation into databases
+                row['DateTime'] = row['DateTime'][:-3].replace(args.src_date_ymd_separator, args.out_date_ymd_separator)
+                row['Event_Year'] = row['DateTime'][:4]
+                row['Event_Month'] = row['DateTime'][5:7]
+                row['Event_Day'] = row['DateTime'][8:10]
+                row['Event_Hour'] = row['DateTime'][11:13]
+                row['Event_Min'] = row['DateTime'][14:16]
+                row['Event_Sec'] = row['DateTime'][17:]
 
                 # convert string lat/lon
                 # to floating-point values
@@ -165,8 +190,9 @@ if os.path.exists(args.src_file_path):
                         row['admin2'] = result['admin2']
                         row['name'] = result['name']
                         # output a row
-                        csv_writer.writerow(row)
-                        out_count += 1
+                        if args.out_header_row == 'Y' or row_count > 1:
+                            csv_writer.writerow(row)
+                            out_count += 1
                 else:
                     # map empty values
                     # to the row values
@@ -175,8 +201,9 @@ if os.path.exists(args.src_file_path):
                     row['admin2'] = ''
                     row['name'] = ''
                     # output a row
-                    csv_writer.writerow(row)
-                    out_count += 1
+                    if args.out_header_row == 'Y' or row_count > 1:
+                        csv_writer.writerow(row)
+                        out_count += 1
 
                 # if row count equals or exceeds max rows
                 if args.max_rows > 0 and row_count >= args.max_rows:
