@@ -64,7 +64,7 @@ arg_parser.add_argument('--out-header-row', default='Y', help='output a header r
 
 arg_parser.add_argument('--out-file-name-folder', default=None, help='output file name folder (default: None')
 arg_parser.add_argument('--out-file-name-prefix', default='NCEDC_earthquakes', help='output file name prefix (default: NCEDC_earthquakes')
-arg_parser.add_argument('--out-file-name-suffix', default='_reverse_geocoded.csv', help='output file name suffix (default: _reverse_geocoded)')
+arg_parser.add_argument('--out-file-name-suffix', default='_reverse_geocoded', help='output file name suffix (default: _reverse_geocoded)')
 arg_parser.add_argument('--out-file-name-extension', default='.csv', help='output file name extension (default: .csv)')
 arg_parser.add_argument('--out-date-ymd-separator', default='-', help='output date year, month, day separator (default: -)')
 
