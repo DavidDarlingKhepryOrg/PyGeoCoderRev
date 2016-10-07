@@ -129,6 +129,7 @@ if os.path.exists(args.src_file_path):
             fieldnames = csv_reader.fieldnames
             # append the reverse geo-coding
             # result fields to field names list
+            fieldnames[fieldnames.index('DateTime')] = 'Event_DTG'
             fieldnames.append('Event_Year')
             fieldnames.append('Event_Month')
             fieldnames.append('Event_Day')
@@ -158,13 +159,16 @@ if os.path.exists(args.src_file_path):
                 # remove last 3 characters (.00)
                 # so that the timestamp will be more
                 # suitable for importation into databases
-                row['DateTime'] = row['DateTime'][:-3].replace(args.src_date_ymd_separator, args.out_date_ymd_separator)
-                row['Event_Year'] = row['DateTime'][:4]
-                row['Event_Month'] = row['DateTime'][5:7]
-                row['Event_Day'] = row['DateTime'][8:10]
-                row['Event_Hour'] = row['DateTime'][11:13]
-                row['Event_Min'] = row['DateTime'][14:16]
-                row['Event_Sec'] = row['DateTime'][17:]
+                row['Event_DTG'] = row['Event_DTG'][:-3].replace(args.src_date_ymd_separator, args.out_date_ymd_separator)
+                row['Event_Year'] = row['Event_DTG'][:4]
+                row['Event_Month'] = row['Event_DTG'][5:7]
+                row['Event_Day'] = row['Event_DTG'][8:10]
+                row['Event_Hour'] = row['Event_DTG'][11:13]
+                row['Event_Min'] = row['Event_DTG'][14:16]
+                row['Event_Sec'] = row['Event_DTG'][17:]
+                
+                # remove DateTime column
+                row.pop('DateTime', None)
 
                 # convert string lat/lon
                 # to floating-point values
