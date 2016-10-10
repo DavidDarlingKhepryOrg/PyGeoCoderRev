@@ -33,6 +33,15 @@ pgm_version = '1.0'
 
 quotemode_choices = ['QUOTE_MINIMAL', 'QUOTE_NONE', 'QUOTE_ALL', 'QUOTE_NONNUMERIC']
 
+def delimiter_xlator(delimiter_str):
+
+    delimiter_val = ','
+    
+    if delimiter_str == '\\t':
+        delimiter_val = '\t'
+    
+    return delimiter_val
+
 def quotemode_xlator(quote_mode_str):
 
     quote_mode_val = csv.QUOTE_MINIMAL
@@ -61,6 +70,7 @@ arg_parser.add_argument('--out-delimiter', default=',', help='output file delimi
 arg_parser.add_argument('--out-quotechar', default='"', help='output file quote character')
 arg_parser.add_argument('--out-quotemode', dest='out_quotemode_str', default='QUOTE_MINIMAL', choices=quotemode_choices, help='output file quoting mode (default: %s)' % 'QUOTE_MINIMAL')
 arg_parser.add_argument('--out-header-row', default='Y', help='output a header row to file (default: Y)')
+arg_parser.add_argument('--out-null-value', default='NULL', help='output null value (default: NULL)')
 
 arg_parser.add_argument('--out-file-name-folder', default=None, help='output file name folder (default: None')
 arg_parser.add_argument('--out-file-name-prefix', default='NCEDC_earthquakes', help='output file name prefix (default: NCEDC_earthquakes')
@@ -84,6 +94,9 @@ if args.out_file_path is None:
     
 args.src_quotemode_enm = quotemode_xlator(args.src_quotemode_str)
 args.out_quotemode_enm = quotemode_xlator(args.out_quotemode_str)
+
+args.src_delimiter = delimiter_xlator(args.src_delimiter)
+args.out_delimiter = delimiter_xlator(args.out_delimiter)
 
 args.max_rows = abs(args.max_rows)
 args.flush_rows = abs(args.flush_rows)
@@ -166,6 +179,13 @@ if os.path.exists(args.src_file_path):
                 row['Event_Hour'] = row['Event_DTG'][11:13]
                 row['Event_Min'] = row['Event_DTG'][14:16]
                 row['Event_Sec'] = row['Event_DTG'][17:]
+                
+                # tweak Depth to None
+                # if it's not numeric
+                if row['Depth'].strip() == '':
+                    row['Depth'] = args.out_null_value;
+                if row['NbStations'].strip() == '':
+                    row['NbStations'] = args.out_null_value;
                 
                 # remove DateTime column
                 row.pop('DateTime', None)
