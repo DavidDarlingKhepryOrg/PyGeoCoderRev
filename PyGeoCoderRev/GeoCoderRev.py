@@ -2,7 +2,7 @@
 
 # ========================================================================
 #
-# Copyright © 2016 Khepry Quixote
+# Copyright � 2016 Khepry Quixote
 # 
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -21,7 +21,9 @@
 import argparse
 import csv
 import io
+import json
 import os
+import requests
 
 from pprint import pprint
 from time import time
@@ -56,6 +58,8 @@ def quotemode_xlator(quote_mode_str):
         quote_mode_val = csv.QUOTE_NONNUMERIC
     
     return quote_mode_val
+        
+        
 
 arg_parser = argparse.ArgumentParser(prog='%s' % pgm_name, description='Reverse geo-code an NCEDC-formatted earthquake CSV file.')
 
@@ -69,8 +73,13 @@ arg_parser.add_argument('--out-file-path', default=None, help='output file path 
 arg_parser.add_argument('--out-delimiter', default=',', help='output file delimiter character')
 arg_parser.add_argument('--out-quotechar', default='"', help='output file quote character')
 arg_parser.add_argument('--out-quotemode', dest='out_quotemode_str', default='QUOTE_MINIMAL', choices=quotemode_choices, help='output file quoting mode (default: %s)' % 'QUOTE_MINIMAL')
-arg_parser.add_argument('--out-header-row', default='Y', help='output a header row to file (default: Y)')
+arg_parser.add_argument('--out-header-row', default='Y', choices=['Y','N'], help='output a header row to file (default: Y)')
 arg_parser.add_argument('--out-null-value', default='NULL', help='output null value (default: NULL)')
+arg_parser.add_argument('--out-elastic-search', default='N', choices=['Y','N'], help='output to ElasticSearch index (default: N)')
+
+arg_parser.add_argument('--es-host-url', default='localhost', help='ElasticSearch host URL')
+arg_parser.add_argument('--es-port-number', default='9200', help='ElasticSearch port number')
+arg_parser.add_argument('--es-index-name', default='quakes', help='ElasticSearch index name')
 
 arg_parser.add_argument('--out-file-name-folder', default=None, help='output file name folder (default: None')
 arg_parser.add_argument('--out-file-name-prefix', default='NCEDC_earthquakes', help='output file name prefix (default: NCEDC_earthquakes')
@@ -117,6 +126,11 @@ print('Command line args:')
 pprint (vars(args))
 print('')
 
+es_actions = []
+
+if args.out_elastic_search == 'Y':
+    from elasticsearch import Elasticsearch, helpers
+
 # beginning time hack
 bgn_time = time()
 
@@ -127,6 +141,15 @@ out_count = 0
 
 # if the source file exists
 if os.path.exists(args.src_file_path):
+
+    if args.out_elastic_search == 'Y':
+        # make sure ES is up and running
+        res = requests.get('http://' + args.es_host_url + ':' + args.es_port_number)
+        pprint(res.content)
+        #connect to the ElasticSearch cluster
+        es = Elasticsearch([{'host': args.es_host_url, 'port': args.es_port_number}])
+        #delete the quakes index
+        es.indices.delete(index=args.es_index_name, ignore=[400,404])
 
     # open the target file for writing
     with io.open(args.out_file_path, 'w', newline='') as out_file:
@@ -160,7 +183,7 @@ if os.path.exists(args.src_file_path):
             # output the header row
             if args.out_header_row == 'Y':
                 csv_writer.writeheader()
-
+            
             # beginning time hack
             bgn_time = time()
 
@@ -217,6 +240,10 @@ if os.path.exists(args.src_file_path):
                         if args.out_header_row == 'Y' or row_count > 1:
                             csv_writer.writerow(row)
                             out_count += 1
+                            if args.out_elastic_search == 'Y':
+                                # es.index(index=args.es_index_name, doc_type='quake', id=out_count, body=body)
+                                action = {'_index': args.es_index_name, '_type': 'quake', '_id': out_count, '_source': json.dumps(row)}
+                                es_actions.append(action)
                 else:
                     # map empty values
                     # to the row values
@@ -228,6 +255,10 @@ if os.path.exists(args.src_file_path):
                     if args.out_header_row == 'Y' or row_count > 1:
                         csv_writer.writerow(row)
                         out_count += 1
+                        if args.out_elastic_search == 'Y':
+                            # es.index(index=args.es_index_name, doc_type='quake', id=out_count, body=body)
+                            action = {'_index': args.es_index_name, '_type': 'quake', '_id': out_count, '_source': json.dumps(row)}
+                            es_actions.append(**row)
 
                 # if row count equals or exceeds max rows
                 if args.max_rows > 0 and row_count >= args.max_rows:
@@ -241,6 +272,10 @@ if os.path.exists(args.src_file_path):
                     # flush accumulated
                     # rows to target file
                     out_file.flush()
+                    
+                    if args.out_elastic_search == 'Y' and len(es_actions) > 0:
+                        helpers.bulk(es, es_actions)
+                        es_actions.clear()
 
                     # ending time hack
                     end_time = time()
@@ -257,6 +292,10 @@ if os.path.exists(args.src_file_path):
 else:
     
     print ('NCEDC-formatted Earthquake file not found: "%s"' % args.src_file_path)
+    
+if args.out_elastic_search == 'Y' and len(es_actions) > 0:
+    helpers.bulk(es, es_actions)
+    es_actions.clear()
 
 # ending time hack
 end_time = time()
@@ -271,4 +310,6 @@ message = "Processed: {:,} rows in {:,.0f} seconds @ {:,.0f} records/second".for
 print(message)
 print('Output file path: "%s"' % args.out_file_path)
 print("Processing finished, {:,} rows output!".format(out_count))
+
+
 
