@@ -20,6 +20,7 @@
 
 import argparse
 import csv
+import datetime
 import io
 import json
 import os
@@ -58,8 +59,22 @@ def quotemode_xlator(quote_mode_str):
         quote_mode_val = csv.QUOTE_NONNUMERIC
     
     return quote_mode_val
-        
-        
+
+def get_datetime_value(value, pattern, null_value):
+    
+    value = value.strip()
+    try:
+        value = datetime.datetime.strptime(value, pattern)
+    except ValueError as ex:
+        value = null_value
+    return value
+
+def get_numeric_value(value, null_value):
+    
+    value = value.strip()
+    if value == '' or not value.isnumeric():
+        value = null_value
+    return value
 
 arg_parser = argparse.ArgumentParser(prog='%s' % pgm_name, description='Reverse geo-code an NCEDC-formatted earthquake CSV file.')
 
@@ -68,6 +83,8 @@ arg_parser.add_argument('--src-delimiter', default=',', help='source file delimi
 arg_parser.add_argument('--src-quotechar', default='"', help='source file quote character')
 arg_parser.add_argument('--src-quotemode', dest='src_quotemode_str', default='QUOTE_MINIMAL', choices=quotemode_choices, help='source file quoting mode (default: %s)' % 'QUOTE_MINIMAL')
 arg_parser.add_argument('--src-date-ymd-separator', default='/', help='source date year, month, day separator (default: /)')
+
+arg_parser.add_argument('--dtg-parse-pattern', default='%Y-%m-%d %H:%M:%S', help='Date-Time-Group Pattern (default: %Y-%m-%d %H:%M:%S)')
 
 arg_parser.add_argument('--out-file-path', default=None, help='output file path (default: None, same path as source file)')
 arg_parser.add_argument('--out-delimiter', default=',', help='output file delimiter character')
@@ -192,50 +209,72 @@ if os.path.exists(args.src_file_path):
 
                 row_count += 1
                 
-                # remove last 3 characters (.00)
-                # so that the timestamp will be more
-                # suitable for importation into databases
+                # tweak column to null
+                # if it's not a valid date-time stamp
                 row['Event_DTG'] = row['Event_DTG'][:-3].replace(args.src_date_ymd_separator, args.out_date_ymd_separator)
-                row['Event_Year'] = row['Event_DTG'][:4]
-                row['Event_Month'] = row['Event_DTG'][5:7]
-                row['Event_Day'] = row['Event_DTG'][8:10]
-                row['Event_Hour'] = row['Event_DTG'][11:13]
-                row['Event_Min'] = row['Event_DTG'][14:16]
-                row['Event_Sec'] = row['Event_DTG'][17:]
-                
-                # tweak Depth to None
-                # if it's not numeric
-                if row['Depth'].strip() == '':
-                    row['Depth'] = args.out_null_value;
-                if row['NbStations'].strip() == '':
-                    row['NbStations'] = args.out_null_value;
-                
-                # remove DateTime column
-                row.pop('DateTime', None)
+                event_dtg = get_datetime_value(row['Event_DTG'], args.dtg_parse_pattern, args.out_null_value)
 
-                # convert string lat/lon
-                # to floating-point values
-                latitude = float(row['Latitude'])
-                longitude = float(row['Longitude'])
-
-                # instantiate coordinates tuple
-                coordinates = (latitude, longitude)
-
-                # search for the coordinates
-                # returning the cc, admin1, admin2, and name values
-                # using a mode 1 (single-threaded) search
-                results = rg.search(coordinates, mode=1) # default mode = 2
-
-                # if results obtained
-                if results is not None:
-                    # result-by-result
-                    for result in results:
-                        # map result values
+                # only output rows with valid DTGs
+                if event_dtg != args.out_null_value:
+                    # remove last 3 characters (.00)
+                    # so that the timestamp will be more
+                    # suitable for importation into databases
+                    row['Event_Year'] = event_dtg.year
+                    row['Event_Month'] = event_dtg.month
+                    row['Event_Day'] = event_dtg.day
+                    row['Event_Hour'] = event_dtg.hour
+                    row['Event_Min'] = event_dtg.minute
+                    row['Event_Sec'] = event_dtg.second
+                    
+                    # tweak columns to NULL
+                    # if they're not numeric
+                    row['Depth'] = get_numeric_value(row['Depth'], args.out_null_value);
+                    row['Magnitude'] = get_numeric_value(row['Magnitude'], args.out_null_value);
+                    row['NbStations'] = get_numeric_value(row['NbStations'], args.out_null_value);
+                    row['Gap'] = get_numeric_value(row['Gap'], args.out_null_value);
+                    row['Distance'] = get_numeric_value(row['Distance'], args.out_null_value);
+                    
+                    # remove DateTime column
+                    row.pop('DateTime', None)
+    
+                    # convert string lat/lon
+                    # to floating-point values
+                    latitude = float(row['Latitude'])
+                    longitude = float(row['Longitude'])
+    
+                    # instantiate coordinates tuple
+                    coordinates = (latitude, longitude)
+    
+                    # search for the coordinates
+                    # returning the cc, admin1, admin2, and name values
+                    # using a mode 1 (single-threaded) search
+                    results = rg.search(coordinates, mode=1) # default mode = 2
+    
+                    # if results obtained
+                    if results is not None:
+                        # result-by-result
+                        for result in results:
+                            # map result values
+                            # to the row values
+                            row['cc'] = result['cc']
+                            row['admin1'] = result['admin1']
+                            row['admin2'] = result['admin2']
+                            row['name'] = result['name']
+                            # output a row
+                            if args.out_header_row == 'Y' or row_count > 1:
+                                csv_writer.writerow(row)
+                                out_count += 1
+                                if args.out_elastic_search == 'Y':
+                                    # es.index(index=args.es_index_name, doc_type='quake', id=out_count, body=body)
+                                    action = {'_index': args.es_index_name, '_type': 'quake', '_id': out_count, '_source': json.dumps(row)}
+                                    es_actions.append(action)
+                    else:
+                        # map empty values
                         # to the row values
-                        row['cc'] = result['cc']
-                        row['admin1'] = result['admin1']
-                        row['admin2'] = result['admin2']
-                        row['name'] = result['name']
+                        row['cc'] = ''
+                        row['admin1'] = ''
+                        row['admin2'] = ''
+                        row['name'] = ''
                         # output a row
                         if args.out_header_row == 'Y' or row_count > 1:
                             csv_writer.writerow(row)
@@ -243,22 +282,7 @@ if os.path.exists(args.src_file_path):
                             if args.out_elastic_search == 'Y':
                                 # es.index(index=args.es_index_name, doc_type='quake', id=out_count, body=body)
                                 action = {'_index': args.es_index_name, '_type': 'quake', '_id': out_count, '_source': json.dumps(row)}
-                                es_actions.append(action)
-                else:
-                    # map empty values
-                    # to the row values
-                    row['cc'] = ''
-                    row['admin1'] = ''
-                    row['admin2'] = ''
-                    row['name'] = ''
-                    # output a row
-                    if args.out_header_row == 'Y' or row_count > 1:
-                        csv_writer.writerow(row)
-                        out_count += 1
-                        if args.out_elastic_search == 'Y':
-                            # es.index(index=args.es_index_name, doc_type='quake', id=out_count, body=body)
-                            action = {'_index': args.es_index_name, '_type': 'quake', '_id': out_count, '_source': json.dumps(row)}
-                            es_actions.append(**row)
+                                es_actions.append(**row)
 
                 # if row count equals or exceeds max rows
                 if args.max_rows > 0 and row_count >= args.max_rows:
