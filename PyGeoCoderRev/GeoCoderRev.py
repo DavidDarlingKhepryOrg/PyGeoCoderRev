@@ -69,12 +69,23 @@ def get_datetime_value(value, pattern, null_value):
         value = null_value
     return value
 
-def get_numeric_value(value, null_value):
+def get_float_value(value, null_value):
     
     value = value.strip()
     if value == '' or not value.isnumeric():
-        value = null_value
-    return value
+        rtn_value = null_value
+    else:
+        rtn_value = float(value)
+    return rtn_value
+
+def get_int_value(value, null_value):
+    
+    value = value.strip()
+    if value == '' or not value.isnumeric():
+        rtn_value = null_value
+    else:
+        rtn_value = int(value)
+    return rtn_value
 
 arg_parser = argparse.ArgumentParser(prog='%s' % pgm_name, description='Reverse geo-code an NCEDC-formatted earthquake CSV file.')
 
@@ -91,7 +102,8 @@ arg_parser.add_argument('--out-delimiter', default=',', help='output file delimi
 arg_parser.add_argument('--out-quotechar', default='"', help='output file quote character')
 arg_parser.add_argument('--out-quotemode', dest='out_quotemode_str', default='QUOTE_MINIMAL', choices=quotemode_choices, help='output file quoting mode (default: %s)' % 'QUOTE_MINIMAL')
 arg_parser.add_argument('--out-header-row', default='Y', choices=['Y','N'], help='output a header row to file (default: Y)')
-arg_parser.add_argument('--out-null-value', default='NULL', help='output null value (default: NULL)')
+arg_parser.add_argument('--out-db-null-value', default=None, help='output null value (default: NULL)')
+arg_parser.add_argument('--out-es-null-value', default=None, help='output null value (default: NULL)')
 arg_parser.add_argument('--out-elastic-search', default='N', choices=['Y','N'], help='output to ElasticSearch index (default: N)')
 
 arg_parser.add_argument('--es-host-url', default='localhost', help='ElasticSearch host URL')
@@ -212,10 +224,10 @@ if os.path.exists(args.src_file_path):
                 # tweak column to null
                 # if it's not a valid date-time stamp
                 row['Event_DTG'] = row['Event_DTG'][:-3].replace(args.src_date_ymd_separator, args.out_date_ymd_separator)
-                event_dtg = get_datetime_value(row['Event_DTG'], args.dtg_parse_pattern, args.out_null_value)
+                event_dtg = get_datetime_value(row['Event_DTG'], args.dtg_parse_pattern, args.out_db_null_value)
 
                 # only output rows with valid DTGs
-                if event_dtg != args.out_null_value:
+                if event_dtg != args.out_db_null_value:
                     # remove last 3 characters (.00)
                     # so that the timestamp will be more
                     # suitable for importation into databases
@@ -228,11 +240,11 @@ if os.path.exists(args.src_file_path):
                     
                     # tweak columns to NULL
                     # if they're not numeric
-                    row['Depth'] = get_numeric_value(row['Depth'], args.out_null_value);
-                    row['Magnitude'] = get_numeric_value(row['Magnitude'], args.out_null_value);
-                    row['NbStations'] = get_numeric_value(row['NbStations'], args.out_null_value);
-                    row['Gap'] = get_numeric_value(row['Gap'], args.out_null_value);
-                    row['Distance'] = get_numeric_value(row['Distance'], args.out_null_value);
+                    row['Depth'] = get_float_value(row['Depth'], args.out_db_null_value);
+                    row['Magnitude'] = get_float_value(row['Magnitude'], args.out_db_null_value);
+                    row['NbStations'] = get_int_value(row['NbStations'], args.out_db_null_value);
+                    row['Gap'] = get_float_value(row['Gap'], args.out_db_null_value);
+                    row['Distance'] = get_float_value(row['Distance'], args.out_db_null_value);
                     
                     # remove DateTime column
                     row.pop('DateTime', None)
