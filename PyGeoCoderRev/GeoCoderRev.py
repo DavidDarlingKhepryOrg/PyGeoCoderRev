@@ -72,19 +72,25 @@ def get_datetime_value(value, pattern, null_value):
 def get_float_value(value, null_value):
     
     value = value.strip()
-    if value == '' or not value.isnumeric():
-        rtn_value = null_value
+    if value != '':
+        try:
+            rtn_value = float(value)
+        except:
+            rtn_value = null_value
     else:
-        rtn_value = float(value)
+        rtn_value = null_value
     return rtn_value
 
 def get_int_value(value, null_value):
     
     value = value.strip()
-    if value == '' or not value.isnumeric():
-        rtn_value = null_value
+    if value != '':
+        try:
+            rtn_value = int(value)
+        except:
+            rtn_value = null_value
     else:
-        rtn_value = int(value)
+        rtn_value = null_value
     return rtn_value
 
 arg_parser = argparse.ArgumentParser(prog='%s' % pgm_name, description='Reverse geo-code an NCEDC-formatted earthquake CSV file.')
@@ -253,6 +259,9 @@ if os.path.exists(args.src_file_path):
                     # to floating-point values
                     latitude = float(row['Latitude'])
                     longitude = float(row['Longitude'])
+                    
+                    row['Latitude'] = get_float_value(row['Latitude'], args.out_db_null_value)
+                    row['Longitude'] = get_float_value(row['Longitude'], args.out_db_null_value)
     
                     # instantiate coordinates tuple
                     coordinates = (latitude, longitude)
