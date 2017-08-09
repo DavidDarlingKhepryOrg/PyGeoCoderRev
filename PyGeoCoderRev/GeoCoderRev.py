@@ -65,7 +65,7 @@ def get_datetime_value(value, pattern, null_value):
     value = value.strip()
     try:
         value = datetime.datetime.strptime(value, pattern)
-    except ValueError as ex:
+    except ValueError:
         value = null_value
     return value
 
