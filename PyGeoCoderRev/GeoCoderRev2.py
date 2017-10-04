@@ -31,7 +31,7 @@ from time import time
 
 import reverse_geocoder as rg
 
-pgm_name = 'GeoCoderRev.py'
+pgm_name = 'GeoCoderRev2.py'
 pgm_version = '1.0'
 
 quotemode_choices = ['QUOTE_MINIMAL', 'QUOTE_NONE', 'QUOTE_ALL', 'QUOTE_NONNUMERIC']
@@ -93,7 +93,7 @@ def get_int_value(value, null_value):
         rtn_value = null_value
     return rtn_value
 
-arg_parser = argparse.ArgumentParser(prog='%s' % pgm_name, description='Reverse geo-code an NCEDC-formatted earthquake CSV file.')
+arg_parser = argparse.ArgumentParser(prog='%s' % pgm_name, description='Reverse geo-code an ANSS ComCat-formatted earthquake CSV file.')
 
 arg_parser.add_argument('--src-file-path', required=True, help='source file path')
 arg_parser.add_argument('--src-delimiter', default=',', help='source file delimiter character')
@@ -117,7 +117,7 @@ arg_parser.add_argument('--es-port-number', default='9200', help='ElasticSearch 
 arg_parser.add_argument('--es-index-name', default='quakes', help='ElasticSearch index name')
 
 arg_parser.add_argument('--out-file-name-folder', default=None, help='output file name folder (default: None')
-arg_parser.add_argument('--out-file-name-prefix', default='NCEDC_earthquakes', help='output file name prefix (default: NCEDC_earthquakes')
+arg_parser.add_argument('--out-file-name-prefix', default='ANSS_ComCat_earthquakes', help='output file name prefix (default: ANSS_ComCat_earthquakes')
 arg_parser.add_argument('--out-file-name-suffix', default='_reverse_geocoded', help='output file name suffix (default: _reverse_geocoded)')
 arg_parser.add_argument('--out-file-name-extension', default='.csv', help='output file name extension (default: .csv)')
 arg_parser.add_argument('--out-date-ymd-separator', default='-', help='output date year, month, day separator (default: -)')
@@ -153,8 +153,8 @@ if args.out_file_path.startswith('~'):
     args.out_file_path = os.path.expanduser(args.outfile_path)
 args.out_file_path = os.path.abspath(args.out_file_path)
     
-print ('Reverse-geocoding source NCEDC earthquakes file: "%s"' % args.src_file_path)
-print ('Outputting to the target NCEDC earthquakes file: "%s"' % args.out_file_path)
+print ('Reverse-geocoding source ANSS ComCat earthquakes file: "%s"' % args.src_file_path)
+print ('Outputting to the target ANSS ComCat earthquakes file: "%s"' % args.out_file_path)
 print ('')
 
 print('Command line args:')
@@ -200,7 +200,8 @@ if os.path.exists(args.src_file_path):
             fieldnames = csv_reader.fieldnames
             # append the reverse geo-coding
             # result fields to field names list
-            fieldnames[fieldnames.index('DateTime')] = 'Event_DTG'
+            fieldnames[fieldnames.index('time')] = 'Event_DTG'
+            fieldnames[fieldnames.index('id')] = 'Event_ID'
             fieldnames.append('Event_Year')
             fieldnames.append('Event_Month')
             fieldnames.append('Event_Day')
@@ -246,22 +247,22 @@ if os.path.exists(args.src_file_path):
                     
                     # tweak columns to NULL
                     # if they're not numeric
-                    row['Depth'] = get_float_value(row['Depth'], args.out_db_null_value);
-                    row['Magnitude'] = get_float_value(row['Magnitude'], args.out_db_null_value);
-                    row['NbStations'] = get_int_value(row['NbStations'], args.out_db_null_value);
-                    row['Gap'] = get_float_value(row['Gap'], args.out_db_null_value);
-                    row['Distance'] = get_float_value(row['Distance'], args.out_db_null_value);
+                    row['depth'] = get_float_value(row['depth'], args.out_db_null_value);
+                    row['mag'] = get_float_value(row['mag'], args.out_db_null_value);
+                    row['nst'] = get_int_value(row['nst'], args.out_db_null_value);
+                    row['gap'] = get_float_value(row['gap'], args.out_db_null_value);
+                    row['dmin'] = get_float_value(row['dmin'], args.out_db_null_value);
                     
                     # remove DateTime column
                     row.pop('DateTime', None)
     
                     # convert string lat/lon
                     # to floating-point values
-                    latitude = float(row['Latitude'])
-                    longitude = float(row['Longitude'])
+                    latitude = float(row['latitude'])
+                    longitude = float(row['longitude'])
                     
-                    row['Latitude'] = get_float_value(row['Latitude'], args.out_db_null_value)
-                    row['Longitude'] = get_float_value(row['Longitude'], args.out_db_null_value)
+                    row['latitude'] = get_float_value(row['latitude'], args.out_db_null_value)
+                    row['longitude'] = get_float_value(row['longitude'], args.out_db_null_value)
     
                     # instantiate coordinates tuple
                     coordinates = (latitude, longitude)
@@ -336,7 +337,7 @@ if os.path.exists(args.src_file_path):
                     
 else:
     
-    print ('NCEDC-formatted Earthquake file not found: "%s"' % args.src_file_path)
+    print ('ANSS ComCat formatted Earthquake file not found: "%s"' % args.src_file_path)
     
 if args.out_elastic_search == 'Y' and len(es_actions) > 0:
     helpers.bulk(es, es_actions)
