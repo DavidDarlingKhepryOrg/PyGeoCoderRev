@@ -150,7 +150,7 @@ if args.src_file_path.startswith('~'):
 args.src_file_path = os.path.abspath(args.src_file_path)
 
 if args.out_file_path.startswith('~'):
-    args.out_file_path = os.path.expanduser(args.outfile_path)
+    args.out_file_path = os.path.expanduser(args.out_file_path)
 args.out_file_path = os.path.abspath(args.out_file_path)
     
 print ('Reverse-geocoding source NCEDC earthquakes file: "%s"' % args.src_file_path)

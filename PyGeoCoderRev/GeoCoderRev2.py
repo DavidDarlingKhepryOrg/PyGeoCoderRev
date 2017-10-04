@@ -99,7 +99,7 @@ arg_parser.add_argument('--src-file-path', required=True, help='source file path
 arg_parser.add_argument('--src-delimiter', default=',', help='source file delimiter character')
 arg_parser.add_argument('--src-quotechar', default='"', help='source file quote character')
 arg_parser.add_argument('--src-quotemode', dest='src_quotemode_str', default='QUOTE_MINIMAL', choices=quotemode_choices, help='source file quoting mode (default: %s)' % 'QUOTE_MINIMAL')
-arg_parser.add_argument('--src-date-ymd-separator', default='/', help='source date year, month, day separator (default: /)')
+arg_parser.add_argument('--src-date-ymd-separator', default='-', help='source date year, month, day separator (default: /)')
 
 arg_parser.add_argument('--dtg-parse-pattern', default='%Y-%m-%d %H:%M:%S', help='Date-Time-Group Pattern (default: %Y-%m-%d %H:%M:%S)')
 
@@ -118,11 +118,11 @@ arg_parser.add_argument('--es-index-name', default='quakes', help='ElasticSearch
 
 arg_parser.add_argument('--out-file-name-folder', default=None, help='output file name folder (default: None')
 arg_parser.add_argument('--out-file-name-prefix', default='ANSS_ComCat_earthquakes', help='output file name prefix (default: ANSS_ComCat_earthquakes')
-arg_parser.add_argument('--out-file-name-suffix', default='_reverse_geocoded', help='output file name suffix (default: _reverse_geocoded)')
+arg_parser.add_argument('--out-file-name-suffix', default='_reverse_geocoded_1000', help='output file name suffix (default: _reverse_geocoded)')
 arg_parser.add_argument('--out-file-name-extension', default='.csv', help='output file name extension (default: .csv)')
 arg_parser.add_argument('--out-date-ymd-separator', default='-', help='output date year, month, day separator (default: -)')
 
-arg_parser.add_argument('--max-rows', type=int, default=0, help='maximum rows to process, 0 means unlimited')
+arg_parser.add_argument('--max-rows', type=int, default=1000, help='maximum rows to process, 0 means unlimited')
 arg_parser.add_argument('--flush-rows', type=int, default=1000, help='flush rows interval')
 
 arg_parser.add_argument('--version', action='version', version='version=%s %s' % (pgm_name, pgm_version))
@@ -150,7 +150,7 @@ if args.src_file_path.startswith('~'):
 args.src_file_path = os.path.abspath(args.src_file_path)
 
 if args.out_file_path.startswith('~'):
-    args.out_file_path = os.path.expanduser(args.outfile_path)
+    args.out_file_path = os.path.expanduser(args.out_file_path)
 args.out_file_path = os.path.abspath(args.out_file_path)
     
 print ('Reverse-geocoding source ANSS ComCat earthquakes file: "%s"' % args.src_file_path)
@@ -230,7 +230,8 @@ if os.path.exists(args.src_file_path):
                 
                 # tweak column to null
                 # if it's not a valid date-time stamp
-                row['Event_DTG'] = row['Event_DTG'][:-3].replace(args.src_date_ymd_separator, args.out_date_ymd_separator)
+                row['Event_DTG'] = row['Event_DTG'][:-5].replace(args.src_date_ymd_separator, args.out_date_ymd_separator).replace('T', ' ')
+                # print('Event_DTG: %s' % row['Event_DTG'])
                 event_dtg = get_datetime_value(row['Event_DTG'], args.dtg_parse_pattern, args.out_db_null_value)
 
                 # only output rows with valid DTGs
