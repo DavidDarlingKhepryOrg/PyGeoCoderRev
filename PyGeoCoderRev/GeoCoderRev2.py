@@ -118,11 +118,11 @@ arg_parser.add_argument('--es-index-name', default='quakes', help='ElasticSearch
 
 arg_parser.add_argument('--out-file-name-folder', default=None, help='output file name folder (default: None')
 arg_parser.add_argument('--out-file-name-prefix', default='ANSS_ComCat_earthquakes', help='output file name prefix (default: ANSS_ComCat_earthquakes')
-arg_parser.add_argument('--out-file-name-suffix', default='_reverse_geocoded_1000', help='output file name suffix (default: _reverse_geocoded)')
+arg_parser.add_argument('--out-file-name-suffix', default='_reverse_geocoded', help='output file name suffix (default: _reverse_geocoded)')
 arg_parser.add_argument('--out-file-name-extension', default='.csv', help='output file name extension (default: .csv)')
 arg_parser.add_argument('--out-date-ymd-separator', default='-', help='output date year, month, day separator (default: -)')
 
-arg_parser.add_argument('--max-rows', type=int, default=1000, help='maximum rows to process, 0 means unlimited')
+arg_parser.add_argument('--max-rows', type=int, default=0, help='maximum rows to process, 0 means unlimited')
 arg_parser.add_argument('--flush-rows', type=int, default=1000, help='flush rows interval')
 
 arg_parser.add_argument('--version', action='version', version='version=%s %s' % (pgm_name, pgm_version))
@@ -134,6 +134,10 @@ args.out_header_row = args.out_header_row.upper();
 if args.out_file_path is None:
     if args.out_file_name_folder is None:
         args.out_file_name_folder = os.path.dirname(args.src_file_path)
+
+if args.max_rows > 0:
+    args.out_file_path = os.path.join(args.out_file_name_folder, args.out_file_name_prefix + args.out_file_name_suffix + '_' + str(args.max_rows) + args.out_file_name_extension)
+else:
     args.out_file_path = os.path.join(args.out_file_name_folder, args.out_file_name_prefix + args.out_file_name_suffix + args.out_file_name_extension)
     
 args.src_quotemode_enm = quotemode_xlator(args.src_quotemode_str)
@@ -202,6 +206,7 @@ if os.path.exists(args.src_file_path):
             # result fields to field names list
             fieldnames[fieldnames.index('time')] = 'Event_DTG'
             fieldnames[fieldnames.index('id')] = 'Event_ID'
+            fieldnames[fieldnames.index('updated')] = 'Updated_DTG'
             fieldnames.append('Event_Year')
             fieldnames.append('Event_Month')
             fieldnames.append('Event_Day')
@@ -230,7 +235,10 @@ if os.path.exists(args.src_file_path):
                 
                 # tweak column to null
                 # if it's not a valid date-time stamp
-                row['Event_DTG'] = row['Event_DTG'][:-5].replace(args.src_date_ymd_separator, args.out_date_ymd_separator).replace('T', ' ')
+                if row['Event_DTG'] is not None:
+                    row['Event_DTG'] = row['Event_DTG'][:-5].replace(args.src_date_ymd_separator, args.out_date_ymd_separator).replace('T', ' ')
+                if row['Updated_DTG'] is not None:
+                    row['Updated_DTG'] = row['Updated_DTG'][:-5].replace(args.src_date_ymd_separator, args.out_date_ymd_separator).replace('T', ' ')
                 # print('Event_DTG: %s' % row['Event_DTG'])
                 event_dtg = get_datetime_value(row['Event_DTG'], args.dtg_parse_pattern, args.out_db_null_value)
 
