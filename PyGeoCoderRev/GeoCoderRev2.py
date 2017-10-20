@@ -25,6 +25,7 @@ import io
 import json
 import os
 import requests
+import sys
 
 from pprint import pprint
 from time import time
@@ -40,7 +41,7 @@ def delimiter_xlator(delimiter_str):
 
     delimiter_val = ','
     
-    if delimiter_str == '\\t':
+    if delimiter_str == '\\t' or delimiter_str == '\t':
         delimiter_val = '\t'
     
     return delimiter_val
@@ -86,16 +87,36 @@ def get_int_value(value, null_value):
     value = value.strip()
     if value != '':
         try:
-            rtn_value = int(value)
+            rtn_value = int(float(value))
         except:
             rtn_value = null_value
     else:
         rtn_value = null_value
     return rtn_value
 
+def get_magnitude_values(value, null_value):
+    
+    mag = 0
+    magInt = 0
+    mags = [0] * 10
+
+    value = value.strip()
+
+    if value != '':
+        try:
+            mag = float(value)
+            if mag < 0:
+                mag = 0.0
+            magInt = int(mag)
+            mags[magInt] = 1
+        except:
+            pass
+
+    return mag, magInt, mags
+
 arg_parser = argparse.ArgumentParser(prog='%s' % pgm_name, description='Reverse geo-code an ANSS ComCat-formatted earthquake CSV file.')
 
-arg_parser.add_argument('--src-file-path', required=True, help='source file path')
+arg_parser.add_argument('--src-file-path', required=False, help='source file path', default='~/Documents/data/quake-info/ANSS_ComCat_earthquakes.csv')
 arg_parser.add_argument('--src-delimiter', default=',', help='source file delimiter character')
 arg_parser.add_argument('--src-quotechar', default='"', help='source file quote character')
 arg_parser.add_argument('--src-quotemode', dest='src_quotemode_str', default='QUOTE_MINIMAL', choices=quotemode_choices, help='source file quoting mode (default: %s)' % 'QUOTE_MINIMAL')
@@ -127,7 +148,10 @@ arg_parser.add_argument('--flush-rows', type=int, default=1000, help='flush rows
 
 arg_parser.add_argument('--version', action='version', version='version=%s %s' % (pgm_name, pgm_version))
 
-args = arg_parser.parse_args()
+try:
+    args = arg_parser.parse_args()
+except Exception as e:
+    print(e)
 
 args.out_header_row = args.out_header_row.upper();
 
@@ -202,21 +226,58 @@ if os.path.exists(args.src_file_path):
             # obtain the field names from
             # the first line of the source file
             fieldnames = csv_reader.fieldnames
-            # append the reverse geo-coding
-            # result fields to field names list
-            fieldnames[fieldnames.index('time')] = 'Event_DTG'
-            fieldnames[fieldnames.index('id')] = 'Event_ID'
-            fieldnames[fieldnames.index('updated')] = 'Updated_DTG'
-            fieldnames.append('Event_Year')
-            fieldnames.append('Event_Month')
-            fieldnames.append('Event_Day')
-            fieldnames.append('Event_Hour')
-            fieldnames.append('Event_Min')
-            fieldnames.append('Event_Sec')
-            fieldnames.append('cc')
-            fieldnames.append('admin1')
-            fieldnames.append('admin2')
-            fieldnames.append('name')
+
+            # append various deriviative
+            # fields to field names list
+
+            if 'time' in fieldnames:
+                fieldnames[fieldnames.index('time')] = 'Event_DTG'
+            if 'id' in fieldnames:
+                fieldnames[fieldnames.index('id')] = 'Event_ID'
+            if 'updated' in fieldnames:
+                fieldnames[fieldnames.index('updated')] = 'Updated_DTG'
+            if 'Event_Year' not in fieldnames:
+                fieldnames.append('Event_Year')
+            if 'Event_Month' not in fieldnames:
+                fieldnames.append('Event_Month')
+            if 'Event_Day' not in fieldnames:
+                fieldnames.append('Event_Day')
+            if 'Event_Hour' not in fieldnames:
+                fieldnames.append('Event_Hour')
+            if 'Event_Min' not in fieldnames:
+                fieldnames.append('Event_Min')
+            if 'Event_Sec' not in fieldnames:
+                fieldnames.append('Event_Sec')
+            if 'cc' not in fieldnames:
+                fieldnames.append('cc')
+            if 'admin1' not in fieldnames:
+                fieldnames.append('admin1')
+            if 'admin2' not in fieldnames:
+                fieldnames.append('admin2')
+            if 'name' not in fieldnames:
+                fieldnames.append('name')
+            if 'magInt' not in fieldnames:
+                fieldnames.append('magInt')
+            if 'mag0' not in fieldnames:
+                fieldnames.append('mag0')
+            if 'mag1' not in fieldnames:
+                fieldnames.append('mag1')
+            if 'mag2' not in fieldnames:
+                fieldnames.append('mag2')
+            if 'mag3' not in fieldnames:
+                fieldnames.append('mag3')
+            if 'mag4' not in fieldnames:
+                fieldnames.append('mag4')
+            if 'mag5' not in fieldnames:
+                fieldnames.append('mag5')
+            if 'mag6' not in fieldnames:
+                fieldnames.append('mag6')
+            if 'mag7' not in fieldnames:
+                fieldnames.append('mag7')
+            if 'mag8' not in fieldnames:
+                fieldnames.append('mag8')
+            if 'mag9' not in fieldnames:
+                fieldnames.append('mag9')
 
             # instantiate the CSV dictionary writer object with the modified field names list
             csv_writer = csv.DictWriter(out_file, delimiter=args.out_delimiter, quotechar=args.out_quotechar, quoting=args.out_quotemode_enm, fieldnames=fieldnames)
@@ -235,13 +296,12 @@ if os.path.exists(args.src_file_path):
                 
                 # tweak column to null
                 # if it's not a valid date-time stamp
-                if row['Event_DTG'] is not None:
+                if row['Event_DTG'] is not None and row['Event_DTG'].endswith('.000'):
                     row['Event_DTG'] = row['Event_DTG'][:-5].replace(args.src_date_ymd_separator, args.out_date_ymd_separator).replace('T', ' ')
-                if row['Updated_DTG'] is not None:
+                if row['Updated_DTG'] is not None and row['Updated_DTG'].endswith('.000'):
                     row['Updated_DTG'] = row['Updated_DTG'][:-5].replace(args.src_date_ymd_separator, args.out_date_ymd_separator).replace('T', ' ')
                 # print('Event_DTG: %s' % row['Event_DTG'])
                 event_dtg = get_datetime_value(row['Event_DTG'], args.dtg_parse_pattern, args.out_db_null_value)
-
                 # only output rows with valid DTGs
                 if event_dtg != args.out_db_null_value:
                     # remove last 3 characters (.00)
@@ -256,11 +316,22 @@ if os.path.exists(args.src_file_path):
                     
                     # tweak columns to NULL
                     # if they're not numeric
-                    row['depth'] = get_float_value(row['depth'], args.out_db_null_value);
-                    row['mag'] = get_float_value(row['mag'], args.out_db_null_value);
-                    row['nst'] = get_int_value(row['nst'], args.out_db_null_value);
-                    row['gap'] = get_float_value(row['gap'], args.out_db_null_value);
-                    row['dmin'] = get_float_value(row['dmin'], args.out_db_null_value);
+                    row['depth'] = get_float_value(row['depth'], args.out_db_null_value)
+                    row['nst'] = get_int_value(row['nst'], args.out_db_null_value)
+                    row['gap'] = get_float_value(row['gap'], args.out_db_null_value)
+                    row['dmin'] = get_float_value(row['dmin'], args.out_db_null_value)
+
+                    row['mag'], row['magInt'], mags = get_magnitude_values(row['mag'], args.out_db_null_value)
+                    row['mag0'] = mags[0]
+                    row['mag1'] = mags[1]
+                    row['mag2'] = mags[2]
+                    row['mag3'] = mags[3]
+                    row['mag4'] = mags[4]
+                    row['mag5'] = mags[5]
+                    row['mag6'] = mags[6]
+                    row['mag7'] = mags[7]
+                    row['mag8'] = mags[8]
+                    row['mag9'] = mags[9]
                     
                     # remove DateTime column
                     row.pop('DateTime', None)
